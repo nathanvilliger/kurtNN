@@ -1,0 +1,178 @@
+
+function (float)draw_jump_distance(numeric$ kernel_exp, numeric$ rad)
+{
+/*
+Use inverse transform sampling to sample from the jump kernel. Jump kernel is uniform out to distance 'rad' and then has power law decay according to r^(-(kernel_exp+1)) beyond that. Continuous value across boundary between the two different behaviors.
+
+Inputs: kernel_exp- the kernel exponent of the power law tail of the jump distribution
+		  rad- the distance where the uniform portion of the jump kernel ends and power law decay begins
+
+Returns: dist- the jump distance 
+*/
+	const = kernel_exp / (kernel_exp + 1); // normalization constant
+	u = runif(1);
+	if (u <= const) // if jump falls within uniform probability zone
+	{
+		dist = u * rad / const;
+	}
+	else // jump is beyond the uniform probability zone
+	{
+		dist = (rad^(-kernel_exp) * (const + const * kernel_exp - u * kernel_exp) / const)^(-1 / kernel_exp);
+	}
+	return dist;
+}
+
+function (void)generate_logfile(void)
+{
+/*
+Just getting this out of the main code body. Compile parameters and summary statistics into a LogFile. This assumes dispersal distances are recorded in the individual.tagF property. Run this at the end of simulations for stats on dispersal distances.
+*/
+
+	summary = sim.createLogFile(summary_fname);
+	summary.addCustomColumn('seed', 'SEED;');
+	summary.addCustomColumn('PL_dispersal', 'PL_dispersal;');
+	summary.addCustomColumn('capacity', 'K;');
+	summary.addCustomColumn('habitat_width', 'W;');
+	summary.addCustomColumn('sigma', 'sigma;');
+	summary.addCustomColumn('kernel_exponent', 'alpha;');
+	
+	defineGlobal('dists', p1.individuals.tagF);
+	defineGlobal('kurt', mean( (dists - mean(dists))^4 ) / sd(dists)^4 - 3);
+	summary.addCustomColumn('mean_distance', 'mean(dists);');
+	summary.addCustomColumn('sd_distance', 'sd(dists);');
+	summary.addCustomColumn('max_distance', 'max(dists);');
+	summary.addCustomColumn('excess_kurtosis', 'kurt;');
+	
+	summary.logRow();
+}
+
+initialize() {
+
+	 if(!exists('PL_dispersal')) defineConstant('PL_dispersal', F);
+
+    if(!exists("OUTDIR")) defineConstant("OUTDIR", "~/Desktop/kurtNNtests/"); 
+    setwd(OUTDIR);
+    if(!exists('dist_fname')) defineConstant('dist_fname', 'dists.txt');
+    if(!exists('summary_fname')) defineConstant('summary_fname', 'summary.txt'); 
+    
+    if(!exists("maxgens")) defineConstant("maxgens", 50);
+    if(!exists("SEED")) defineConstant("SEED", asInteger(runif(1, 0, 2^16)));
+    if(!exists("sigma")) defineConstant("sigma", 0.75);
+//    if(!exists("sigma")) defineConstant("sigma", 0.2);
+    if(!exists("alpha")) defineConstant("alpha", 4); // kernel exponent for PL jump kernel
+    if(!exists("K"))  defineConstant("K", 10);
+    if(!exists("W"))defineConstant("W", 50);
+    if(!exists("G"))defineConstant("G", 100000);
+    if(!exists("mu")) defineConstant("mu", 1e-8);
+    if(!exists("r")) defineConstant("r", 1e-9);
+    
+    defineConstant('initial_printouts', T);
+    defineConstant('annual_printouts', F);
+    defineConstant('final_printouts', T);
+
+    setSeed(SEED);
+    initializeSLiMModelType("nonWF");
+    initializeSLiMOptions(dimensionality="xy");
+    initializeTreeSeq();
+    
+    defineConstant("SD", sigma);  
+    defineConstant("SI", sigma);  
+    defineConstant("SM", SI);  
+    defineConstant("L", 4);   
+    defineConstant("FECUN", 1/L); 
+    defineConstant("RHO", FECUN/((1+FECUN) * K));
+    
+    initializeMutationType("m1", 0.5, "g", 0.0, 2);
+    initializeGenomicElementType("g1", m1, 1.0);
+    initializeGenomicElement(g1, 0, G-1);
+    initializeMutationRate(mu);
+    initializeRecombinationRate(r);
+    
+    initializeInteractionType(1, "xy", reciprocal=T, maxDistance=SI * 3);
+    i1.setInteractionFunction("n", 1.0/(2*PI*SI^2), SI);
+    
+    initializeInteractionType(2, "xy", reciprocal=T, maxDistance=SM * 3);
+    i2.setInteractionFunction("n", 1.0/(2*PI*SM^2), SM);
+}
+
+1 early() {
+    sim.addSubpop("p1", asInteger(K * W * W));
+    p1.individuals.tagF = 0.0; // "tagF" (float) tracks mean distance to parents
+    p1.setSpatialBounds(c(0, 0, W, W));
+    for (ind in p1.individuals) {
+        ind.setSpatialPosition(p1.pointUniform());
+    }
+    i1.evaluate(p1);
+    
+    if (initial_printouts){
+    	if (!PL_dispersal){
+    		catn(paste('Dispersal by Gaussian kernel with sigma =', sigma));
+    	}
+    	else {
+    		catn(paste('Dispersal by PL jump kernel with alpha =', alpha, 'and sigma =', sigma));
+    	}
+    }
+}
+
+reproduction() {
+    mate = i2.drawByStrength(individual, 1);
+    if (mate.size()) {
+        nOff = rpois(1, FECUN);
+        for (i in seqLen(nOff)) {
+        		if (PL_dispersal) {
+        			jump = draw_jump_distance(alpha, SD);
+					theta = runif(1, min=0, max=2*PI);
+					jump_vec = jump * c(cos(theta), sin(theta));
+					pos = individual.spatialPosition + jump_vec;
+        		}
+        		else {
+            	pos = individual.spatialPosition + rnorm(2, 0, SD);
+            }
+            
+            if (p1.pointInBounds(pos)) {
+                offspring = subpop.addCrossed(individual, mate);
+                offspring.setSpatialPosition(pos);
+                d_p1 = sqrt(sum((individual.spatialPosition - pos)^2)); // euclidean distance to mother 
+                d_p2 = sqrt(sum((mate.spatialPosition - pos)^2)); // euclidean distance to father
+					 dist_offspring = (d_p1 + d_p2)/2; // mean distance to the parents
+					 offspring.tagF = dist_offspring; // store mean distance to parents
+				}
+			}
+    }
+    return;
+}
+
+early() {
+    i1.evaluate(p1);
+    inds = p1.individuals;
+    competition = i1.totalOfNeighborStrengths(inds);
+    inds.fitnessScaling = pmin(0.95, 1/(1 + RHO * competition));
+    inds.fitnessScaling = inds.fitnessScaling * pmin(sqrt(inds.x/SI), 1.0) * pmin(sqrt(inds.y/SI), 1.0) * pmin(sqrt((W - inds.x)/SI), 1.0) * pmin(sqrt((W - inds.y)/SI), 1.0);
+}
+
+1:999999999 late() {
+    i2.evaluate(p1);	
+    if (annual_printouts) { 
+    	catn(paste("Finished generation ", sim.generation, "; N = ", p1.individualCount, sep=''));
+    }
+    
+    if (p1.individualCount <= (K * W * W / 2)) {
+    	catn('Population going extinct, sim terminated.');
+    	sim.simulationFinished();
+    }
+    
+    if (sim.generation == maxgens){
+            generate_logfile();          
+//				dists = p1.individuals.tagF;
+//				writeFile(dist_fname, paste(dists));
+				if (final_printouts) {
+					catn(paste('sigma is', SD));
+					catn(paste('mean dispersal distance:', mean(dists)));
+					catn(paste('sd dispersal distance:', sd(dists)));
+					catn(paste('max dispersal distance:', max(dists)));
+					kurt = mean((dists - mean(dists))^4) / (sd(dists)^4) - 3;
+					catn(paste('excess kurtosis:', kurt));
+				}
+            sim.simulationFinished();
+    }
+}
