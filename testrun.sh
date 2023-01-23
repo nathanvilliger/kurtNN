@@ -4,8 +4,8 @@
 #SBATCH --output=%x.txt
 #SBATCH --error=%x.txt
 #SBATCH --open-mode=append
-#SBATCH --time=0-00:05:00
-#SBATCH --mem=3G
+#SBATCH --time=0-00:03:00
+#SBATCH --mem=1G
 #SBATCH --array=0-599
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
