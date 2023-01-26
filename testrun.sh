@@ -1,19 +1,19 @@
 #!/bin/bash
-#SBATCH --partition=short
-#SBATCH --job-name=karr
+#SBATCH --partition=short,preempt
+#SBATCH --job-name=test
 #SBATCH --output=%x.txt
 #SBATCH --error=%x.txt
 #SBATCH --open-mode=append
-#SBATCH --time=0-00:03:00
-#SBATCH --mem=1G
-#SBATCH --array=0-599
+#SBATCH --time=0-05:00:00
+#SBATCH --mem=2G
+#SBATCH --array=0-10
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --account=softmatter
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=nvillig2@uoregon.edu
 
-OUTDIR=test_runs
+OUTDIR=training_data
 mkdir -p ${OUTDIR}
 
 module load python3

@@ -13,39 +13,40 @@ This is messy but intended just as a quick and dirty prototype for now.
 import numpy as np
 import subprocess, sys
 
+# dispersal parameters
 sigma_range = (0.2, 2)
-alpha_range = (1, 5)
+alpha_range = (2, 5)
+sigma, alpha = np.random.uniform(*sigma_range), np.random.uniform(*alpha_range)
+PL = str(np.random.uniform() > 0.5)[0] # will be T or F for SLiM
 
-# want 100 gaussian low sigma, 100 gaussian high sigma, 100 PL low alpha low sigma,
-# 100 PL low alpha high sigma, 100 PL high alpha low sigma, 100 PL high alpha high sigma
-# following adapted from original (bad) for-loop
+# mutation and recombination
+mutrate = 0
+recomb = 1e-8
+
+# simulation options
+cap = 10
+width = 50
+maxgens = 1e5
+record_dists = True
+
 i = int(sys.argv[1])
-PL = 'F' if i < 200 else 'T'
-if i < 100:
-    sigma = np.min(sigma_range)
-    alpha = np.min(alpha_range)
-elif i >= 100 and i < 200:
-    sigma = np.max(sigma_range)
-    alpha = np.min(alpha_range)
-elif i >= 200 and i < 300:
-    sigma = np.min(sigma_range)
-    alpha = np.min(alpha_range)
-elif i >= 300 and i < 400:
-    sigma = np.max(sigma_range)
-    alpha = np.min(alpha_range)
-elif i >= 400 and i < 500:
-    sigma = np.min(sigma_range)
-    alpha = np.max(alpha_range)
-elif i >= 500:
-    sigma = np.max(sigma_range)
-    alpha = np.max(alpha_range)
-
 command = ['./slim_3.7', '-l', '0',
            '-d', f'sigma={sigma}',
            '-d', f'alpha={alpha}',
            '-d', f'PL_dispersal={PL}',
-           '-d', 'maxgens=50',
+           '-d', f'mu={mutrate}',
+           '-d', f'r={recomb}',
+           '-d', f'K={cap}',
+           '-d', f'W={width}',
+           '-d', f'maxgens={maxgens}',
            '-d', f'OUTDIR="{sys.argv[2]}"',
            '-d', f'summary_fname="summary{i}.txt"',
+           '-d', f'record_dists={"T" if record_dists else "F"}',
+           '-d', f'dist_fname="dists{i}.txt"',
+           '-d', f'tree_fname="tree{i}.trees"',
            'test.slim']
 subprocess.run(command)
+
+if PL == 'T': disprint = f'PL dispersal with sigma = {sigma:.2f} and alpha = {alpha:.2f}'
+else: disprint = f'Gaussian dispersal with sigma = {sigma:.2f}'
+print(f'run {i} done --', disprint, flush=True)

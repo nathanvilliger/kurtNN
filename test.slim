@@ -42,33 +42,36 @@ Just getting this out of the main code body. Compile parameters and summary stat
 	summary.addCustomColumn('sd_distance', 'sd(dists);');
 	summary.addCustomColumn('max_distance', 'max(dists);');
 	summary.addCustomColumn('excess_kurtosis', 'kurt;');
+	summary.addCustomColumn('LDD_class', 'asInteger(kurt > 1);');
 	
 	summary.logRow();
 }
 
 initialize() {
 
-	 if(!exists('PL_dispersal')) defineConstant('PL_dispersal', F);
+	 if(!exists('PL_dispersal')) defineConstant('PL_dispersal', T);
 
     if(!exists("OUTDIR")) defineConstant("OUTDIR", "~/Desktop/kurtNNtests/"); 
     setwd(OUTDIR);
+    if(!exists('record_dists')) defineConstant('record_dists', F);
     if(!exists('dist_fname')) defineConstant('dist_fname', 'dists.txt');
     if(!exists('summary_fname')) defineConstant('summary_fname', 'summary.txt'); 
+    if(!exists('tree_fname')) defineConstant('tree_fname', 'tree.trees');
     
-    if(!exists("maxgens")) defineConstant("maxgens", 50);
+    if(!exists("maxgens")) defineConstant("maxgens", 500);
     if(!exists("SEED")) defineConstant("SEED", asInteger(runif(1, 0, 2^16)));
-    if(!exists("sigma")) defineConstant("sigma", 0.75);
-//    if(!exists("sigma")) defineConstant("sigma", 0.2);
-    if(!exists("alpha")) defineConstant("alpha", 4); // kernel exponent for PL jump kernel
+//    if(!exists("sigma")) defineConstant("sigma", 0.75);
+    if(!exists("sigma")) defineConstant("sigma", 0.2);
+    if(!exists("alpha")) defineConstant("alpha", 2); // kernel exponent for PL jump kernel
     if(!exists("K"))  defineConstant("K", 10);
     if(!exists("W"))defineConstant("W", 50);
     if(!exists("G"))defineConstant("G", 100000);
-    if(!exists("mu")) defineConstant("mu", 1e-8);
+    if(!exists("mu")) defineConstant("mu", 0);
     if(!exists("r")) defineConstant("r", 1e-9);
     
-    defineConstant('initial_printouts', T);
+    defineConstant('initial_printouts', F);
     defineConstant('annual_printouts', F);
-    defineConstant('final_printouts', T);
+    defineConstant('final_printouts', F);
 
     setSeed(SEED);
     initializeSLiMModelType("nonWF");
@@ -152,19 +155,30 @@ early() {
 
 1:999999999 late() {
     i2.evaluate(p1);	
+
+	 if (p1.individualCount < ((K * W * W) / 2)) {
+	 	cat('Population going extinct; sim terminated. ');
+    	if (!PL_dispersal){
+    		catn(paste('Dispersal by Gaussian kernel with sigma =', sigma));
+    	}
+    	else {
+    		catn(paste('Dispersal by PL jump kernel with alpha =', alpha, 'and sigma =', sigma));
+    	}
+	 	sim.simulationFinished();
+	 }    
+    
     if (annual_printouts) { 
     	catn(paste("Finished generation ", sim.generation, "; N = ", p1.individualCount, sep=''));
     }
-    
-    if (p1.individualCount <= (K * W * W / 2)) {
-    	catn('Population going extinct, sim terminated.');
-    	sim.simulationFinished();
-    }
-    
+        
     if (sim.generation == maxgens){
-            generate_logfile();          
-//				dists = p1.individuals.tagF;
-//				writeFile(dist_fname, paste(dists));
+            generate_logfile();
+            sim.treeSeqOutput(tree_fname);
+            if (record_dists) {
+					dists = p1.individuals.tagF;
+					writeFile(dist_fname, paste(dists));            
+            }
+               
 				if (final_printouts) {
 					catn(paste('sigma is', SD));
 					catn(paste('mean dispersal distance:', mean(dists)));
