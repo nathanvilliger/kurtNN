@@ -58,7 +58,7 @@ initialize() {
     if(!exists('summary_fname')) defineConstant('summary_fname', 'summary.txt'); 
     if(!exists('tree_fname')) defineConstant('tree_fname', 'tree.trees');
     
-    if(!exists("maxgens")) defineConstant("maxgens", 500);
+    if(!exists("maxgens")) defineConstant("maxgens", 200);
     if(!exists("SEED")) defineConstant("SEED", asInteger(runif(1, 0, 2^16)));
 //    if(!exists("sigma")) defineConstant("sigma", 0.75);
     if(!exists("sigma")) defineConstant("sigma", 0.2);
@@ -135,10 +135,14 @@ reproduction() {
             if (p1.pointInBounds(pos)) {
                 offspring = subpop.addCrossed(individual, mate);
                 offspring.setSpatialPosition(pos);
-                d_p1 = sqrt(sum((individual.spatialPosition - pos)^2)); // euclidean distance to mother 
-                d_p2 = sqrt(sum((mate.spatialPosition - pos)^2)); // euclidean distance to father
-					 dist_offspring = (d_p1 + d_p2)/2; // mean distance to the parents
-					 offspring.tagF = dist_offspring; // store mean distance to parents
+                
+                // don't waste time recording these before end of sims
+                if (sim.generation >= (maxgens - 200)) {
+	                d_p1 = sqrt(sum((individual.spatialPosition - pos)^2)); // euclidean distance to mother 
+	                d_p2 = sqrt(sum((mate.spatialPosition - pos)^2)); // euclidean distance to father
+						 dist_offspring = (d_p1 + d_p2)/2; // mean distance to the parents
+						 offspring.tagF = dist_offspring; // store mean distance to parents
+					 }
 				}
 			}
     }
