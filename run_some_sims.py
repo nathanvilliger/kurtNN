@@ -44,7 +44,7 @@ command = ['./slim_3.7', '-l', '0',
            '-d', f'record_dists={"T" if record_dists else "F"}',
            '-d', f'dist_fname="dists{i}.txt"',
            '-d', f'tree_fname="tree{i}.trees"',
-           'test.slim']
+           'simulate.slim']
 subprocess.run(command)
 
 if PL == 'T': disprint = f'PL dispersal with sigma = {sigma:.2f} and alpha = {alpha:.2f}'
