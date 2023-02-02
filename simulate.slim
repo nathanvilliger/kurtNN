@@ -29,6 +29,7 @@ Just getting this out of the main code body. Compile parameters and summary stat
 */
 
 	summary = sim.createLogFile(summary_fname);
+	summary.addCustomColumn('idx', 'idx;');
 	summary.addCustomColumn('seed', 'SEED;');
 	summary.addCustomColumn('PL_dispersal', 'PL_dispersal;');
 	summary.addCustomColumn('capacity', 'K;');
@@ -49,53 +50,67 @@ Just getting this out of the main code body. Compile parameters and summary stat
 
 initialize() {
 
-	 if(!exists('PL_dispersal')) defineConstant('PL_dispersal', T);
+	if (exists('slimgui')) {
+		// set all of these variables from command line if not using the GUI
+		
+		// dispersal/landscape related
+		defineConstant('PL_dispersal', T);
+		defineConstant("sigma", 0.2);
+		defineConstant("alpha", 2.0); // kernel exponent for power law jump kernel
+		defineConstant("K", 10);
+		defineConstant("W", 50);
+		
+		// output options
+		defineConstant("OUTDIR", "~/Desktop/kurtNNtests/");
+		defineConstant('record_dists', F);
+		defineConstant('dist_fname', 'dists.txt');
+		defineConstant('summary_fname', 'summary.txt'); 
+		defineConstant('tree_fname', 'tree.trees');
+		
+		// other sim parameters
+		defineConstant("maxgens", 30);		
+	}
 
-    if(!exists("OUTDIR")) defineConstant("OUTDIR", "~/Desktop/kurtNNtests/"); 
-    setwd(OUTDIR);
-    if(!exists('record_dists')) defineConstant('record_dists', F);
-    if(!exists('dist_fname')) defineConstant('dist_fname', 'dists.txt');
-    if(!exists('summary_fname')) defineConstant('summary_fname', 'summary.txt'); 
-    if(!exists('tree_fname')) defineConstant('tree_fname', 'tree.trees');
+	// what should be printed out during sim?
+   defineConstant('initial_printouts', T);
+   defineConstant('annual_printouts', F);
+   defineConstant('halfway_printout', F);
+   defineConstant('final_printouts', F);
+	
+	setwd(OUTDIR);
+	if(!exists("SEED")) defineConstant("SEED", asInteger(runif(1, 0, 2^16)));
+	setSeed(SEED);
+	if(!exists('idx')) defineConstant('idx', 0);
+	
+	// genomic options, can set from CL if desired
+   if(!exists("G")) defineConstant("G", 100000);
+   if(!exists("mu")) defineConstant("mu", 0);
+   if(!exists("r")) defineConstant("r", 1e-8);
     
-    if(!exists("maxgens")) defineConstant("maxgens", 200);
-    if(!exists("SEED")) defineConstant("SEED", asInteger(runif(1, 0, 2^16)));
-//    if(!exists("sigma")) defineConstant("sigma", 0.75);
-    if(!exists("sigma")) defineConstant("sigma", 0.2);
-    if(!exists("alpha")) defineConstant("alpha", 2); // kernel exponent for PL jump kernel
-    if(!exists("K"))  defineConstant("K", 10);
-    if(!exists("W"))defineConstant("W", 50);
-    if(!exists("G"))defineConstant("G", 100000);
-    if(!exists("mu")) defineConstant("mu", 0);
-    if(!exists("r")) defineConstant("r", 1e-9);
+   // ------------------------------------------------------------------------ 
+   // shouldn't need to touch anything below
+   initializeSLiMModelType("nonWF");
+   initializeSLiMOptions(dimensionality="xy");
+   initializeTreeSeq();
     
-    defineConstant('initial_printouts', F);
-    defineConstant('annual_printouts', F);
-    defineConstant('final_printouts', F);
-
-    setSeed(SEED);
-    initializeSLiMModelType("nonWF");
-    initializeSLiMOptions(dimensionality="xy");
-    initializeTreeSeq();
+   defineConstant("SD", sigma);  
+   defineConstant("SI", sigma);  
+   defineConstant("SM", SI);  
+   defineConstant("L", 4);   
+   defineConstant("FECUN", 1/L); 
+   defineConstant("RHO", FECUN/((1+FECUN) * K));
     
-    defineConstant("SD", sigma);  
-    defineConstant("SI", sigma);  
-    defineConstant("SM", SI);  
-    defineConstant("L", 4);   
-    defineConstant("FECUN", 1/L); 
-    defineConstant("RHO", FECUN/((1+FECUN) * K));
+   initializeMutationType("m1", 0.5, "g", 0.0, 2);
+   initializeGenomicElementType("g1", m1, 1.0);
+   initializeGenomicElement(g1, 0, G-1);
+   initializeMutationRate(mu);
+   initializeRecombinationRate(r);
     
-    initializeMutationType("m1", 0.5, "g", 0.0, 2);
-    initializeGenomicElementType("g1", m1, 1.0);
-    initializeGenomicElement(g1, 0, G-1);
-    initializeMutationRate(mu);
-    initializeRecombinationRate(r);
+   initializeInteractionType(1, "xy", reciprocal=T, maxDistance=SI * 3);
+   i1.setInteractionFunction("n", 1.0/(2*PI*SI^2), SI);
     
-    initializeInteractionType(1, "xy", reciprocal=T, maxDistance=SI * 3);
-    i1.setInteractionFunction("n", 1.0/(2*PI*SI^2), SI);
-    
-    initializeInteractionType(2, "xy", reciprocal=T, maxDistance=SM * 3);
-    i2.setInteractionFunction("n", 1.0/(2*PI*SM^2), SM);
+   initializeInteractionType(2, "xy", reciprocal=T, maxDistance=SM * 3);
+   i2.setInteractionFunction("n", 1.0/(2*PI*SM^2), SM);
 }
 
 1 early() {
@@ -108,11 +123,12 @@ initialize() {
     i1.evaluate(p1);
     
     if (initial_printouts){
+    	cat(paste('run', idx, 'starting -- ')); 
     	if (!PL_dispersal){
-    		catn(paste('Dispersal by Gaussian kernel with sigma =', sigma));
+    		catn(paste('dispersal by Gaussian kernel with sigma =', format('%.2f', sigma)));
     	}
     	else {
-    		catn(paste('Dispersal by PL jump kernel with alpha =', alpha, 'and sigma =', sigma));
+    		catn(paste('dispersal by PL jump kernel with sigma =', format('%.2f', sigma), 'and alpha =', format('%.2f', alpha)));
     	}
     }
 }
@@ -161,12 +177,12 @@ early() {
     i2.evaluate(p1);	
 
 	 if (p1.individualCount < ((K * W * W) / 2)) {
-	 	cat('Population going extinct; sim terminated. ');
+	 	cat(paste('run', idx, '-- population going extinct; sim terminated. '));
     	if (!PL_dispersal){
     		catn(paste('Dispersal by Gaussian kernel with sigma =', sigma));
     	}
     	else {
-    		catn(paste('Dispersal by PL jump kernel with alpha =', alpha, 'and sigma =', sigma));
+    		catn(paste('Dispersal by PL jump kernel with sigma =', sigma, 'and alpha =', alpha));
     	}
 	 	sim.simulationFinished();
 	 }    
@@ -174,13 +190,15 @@ early() {
     if (annual_printouts) { 
     	catn(paste("Finished generation ", sim.generation, "; N = ", p1.individualCount, sep=''));
     }
+    
+    if (halfway_printout) if (sim.generation == asInteger(maxgens/2)) catn(paste('run', idx, 'halfway done'));
         
     if (sim.generation == maxgens){
             generate_logfile();
-            sim.treeSeqOutput(tree_fname);
+            if (!exists('slimgui')) sim.treeSeqOutput(tree_fname);
             if (record_dists) {
 					dists = p1.individuals.tagF;
-					writeFile(dist_fname, paste(dists));            
+					writeFile(dist_fname, paste(dists, sep='\n'));            
             }
                
 				if (final_printouts) {

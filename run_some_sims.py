@@ -31,6 +31,7 @@ record_dists = True
 
 i = int(sys.argv[1])
 command = ['./slim_3.7', '-l', '0',
+           '-d', f'idx={i}',
            '-d', f'sigma={sigma}',
            '-d', f'alpha={alpha}',
            '-d', f'PL_dispersal={PL}',

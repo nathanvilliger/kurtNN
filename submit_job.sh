@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --partition=short,preempt
-#SBATCH --job-name=test
+#SBATCH --partition=kern,long
+#SBATCH --job-name=karr
 #SBATCH --output=%x.txt
 #SBATCH --error=%x.txt
 #SBATCH --open-mode=append
-#SBATCH --time=0-05:00:00
+#SBATCH --time=3-00:00:00
 #SBATCH --mem=2G
-#SBATCH --array=0-10
+#SBATCH --array=151-2000
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --account=softmatter
+#SBATCH --account=kernlab
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=nvillig2@uoregon.edu
 
