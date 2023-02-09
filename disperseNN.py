@@ -1,12 +1,12 @@
 # main code for disperseNN
 
-import os
+import os, sys
 import argparse
 import tskit
 from sklearn.model_selection import train_test_split
 from check_params import *
 from read_input import *
-from process_input import *
+# from process_input import *
 from data_generation import DataGenerator
 import gpustat
 
@@ -37,6 +37,9 @@ parser.add_argument("--empirical", default=None,
                     help="prefix for vcf and locs")
 parser.add_argument(
     "--target_list", help="list of filepaths to targets (sigma).", default=None)
+parser.add_argument(
+    "--target_csv", default=None,
+     help="CSV file with all targets, assumed to contain columns as named by SLiM script")
 parser.add_argument(
     "--tree_list", help="list of tree filepaths.", default=None)
 parser.add_argument(
@@ -225,12 +228,25 @@ def load_network():
     h = tf.keras.layers.Dense(128, activation="relu")(h)
 
     h = tf.keras.layers.Dropout(args.dropout)(h)
-    output = tf.keras.layers.Dense(1, activation="linear")(h)
-    model = tf.keras.Model(
-        inputs=[geno_input, width_input], outputs=[output]
-    )
     opt = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
-    model.compile(loss="mse", optimizer=opt)
+
+    if args.target_csv is None:
+        output = tf.keras.layers.Dense(1, activation="linear")(h)
+        model = tf.keras.Model(
+            inputs=[geno_input, width_input], outputs=[output]
+        )
+        model.compile(loss="mse", optimizer=opt)
+    else:
+        out_mean = tf.keras.layers.Dense(1, activation="linear", name='out_mean')(h)
+        out_sd = tf.keras.layers.Dense(1, activation="linear", name='out_sd')(h)
+        out_LDDclass = tf.keras.layers.Dense(2, activation='softmax', name='out_LDD')(h) # one for each class
+        model = tf.keras.Model(
+            inputs=[geno_input, width_input], outputs=[out_mean, out_sd, out_LDDclass]
+        )
+        # categorical crossentropy for class probabilities on classification output. will sparse do that?
+        model.compile(loss={'out_mean':'mse', 'out_sd':'mse', 'out_LDD':'sparse_categorical_crossentropy'},
+                      optimizer=opt)
+
     model.summary()
 
     # load weights
@@ -308,10 +324,16 @@ def prep_trees_and_train():
     trees = read_dict(args.tree_list)
     total_sims = len(trees)
 
-    # read targets                                                                        
+    # read targets
     if args.target_list != None:
         targets = read_single_value(args.target_list)
         targets = np.log(targets)
+    elif args.target_csv != None:
+        target_df = pd.read_csv(args.target_csv)[['idx', 'mean_distance', 'sd_distance', 'LDD_class']]
+        # dummy check: (assuming recap'd trees in following directory, named tree<num>_recap.trees)
+        for i in range(total_sims):
+            if trees[i] != f'training_data/tree{int(target_df.iloc[i]["idx"])}_recap.trees':
+                sys.exit('MISMATCH! Check order of trees and targets.')
     else:
         print("reading true values from tree sequences: this should take several minutes")
         targets = []
@@ -322,12 +344,28 @@ def prep_trees_and_train():
             targets.append(target)
 
     # normalize targets
-    meanSig = np.mean(targets)
-    sdSig = np.std(targets)
-    np.save(f"{args.out}_training_params", [
-            meanSig, sdSig, args.max_n, args.num_snps])
-    targets = [(x - meanSig) / sdSig for x in targets]  # center and scale
-    targets = dict_from_list(targets)
+    # assuming just one target
+    if args.target_csv == None:
+        meanSig = np.mean(targets)
+        sdSig = np.std(targets)
+        np.save(f"{args.out}_training_params", [
+                meanSig, sdSig, args.max_n, args.num_snps])
+        targets = [(x - meanSig) / sdSig for x in targets]  # center and scale
+        targets = dict_from_list(targets)
+
+    # now assume three targets from target_df
+    else:
+        means, sds = target_df.mean_distance, target_df.sd_distance
+        scaled_means = np.array((means - np.mean(means)) / np.std(means))
+        scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
+        LDD_classes = list(target_df.LDD_class)
+        # convert LDD target to one-hot encoding - maybe necessary in future for class probabilities?
+        # LDD_onehot = np.zeros((total_sims, 2))
+        # for i in range(total_sims):
+        #     LDD_onehot[i, LDD_classes[i]] = 1
+
+        targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
+        targets = dict_from_list(targets)
 
     # split into val,train sets
     sim_ids = np.arange(0, total_sims)
@@ -548,7 +586,7 @@ def prep_trees_and_pred():
             target = parse_provenance(ts, 'sigma')
             target = np.log(target)
             targets.append(target)
-            
+
     # organize "partition" to hand to data generator
     partition = {}
     if args.num_pred == None:
