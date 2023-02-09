@@ -6,7 +6,7 @@ files <- Sys.glob(str_c(d0, 'summary*.txt'))
 print(sprintf('Combining %d files', length(files)))
 
 dfs <- lapply(files, read_csv, col_types=cols())
-bound <- bind_rows(dfs)
+bound <- bind_rows(dfs) %>% arrange(idx)
 
 outname <- str_c(d0, 'combined_summary.csv')
 write_csv(bound, outname)
