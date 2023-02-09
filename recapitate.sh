@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --partition=kern,short
+#SBATCH --partition=short
 #SBATCH --job-name=recap
 #SBATCH --output=%x.txt
 #SBATCH --error=%x.txt
-#SBATCH --time=1-00:00:00
-#SBATCH --mem=10G
+#SBATCH --time=0-01:00:00
+#SBATCH --mem=1G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
@@ -26,4 +26,6 @@ for i in {1..2000}; do
         echo ${DIR}/tree$i"_"recap.trees >> ${DIR}/tree_list.txt
   fi
 done
+
+# parallel works on short partition but not on kern partition?
 parallel -j ${SLURM_CPUS_PER_TASK} < ${DIR}/recap_commands.txt
