@@ -2,6 +2,7 @@
 
 import os, sys
 import argparse
+import pandas as pd
 import tskit
 from sklearn.model_selection import train_test_split
 from check_params import *
@@ -243,7 +244,6 @@ def load_network():
         model = tf.keras.Model(
             inputs=[geno_input, width_input], outputs=[out_mean, out_sd, out_LDDclass]
         )
-        # categorical crossentropy for class probabilities on classification output. will sparse do that?
         model.compile(loss={'out_mean':'mse', 'out_sd':'mse', 'out_LDD':'sparse_categorical_crossentropy'},
                       optimizer=opt)
 
@@ -359,10 +359,6 @@ def prep_trees_and_train():
         scaled_means = np.array((means - np.mean(means)) / np.std(means))
         scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
         LDD_classes = list(target_df.LDD_class)
-        # convert LDD target to one-hot encoding - maybe necessary in future for class probabilities?
-        # LDD_onehot = np.zeros((total_sims, 2))
-        # for i in range(total_sims):
-        #     LDD_onehot[i, LDD_classes[i]] = 1
 
         targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
         targets = dict_from_list(targets)

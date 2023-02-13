@@ -1,21 +1,23 @@
 #!/bin/bash
-#SBATCH --partition=kern,fat
-#SBATCH --job-name=train
+#SBATCH --partition=kern,long
+#SBATCH --job-name=highn
 #SBATCH --output=%x.txt
 #SBATCH --error=%x.txt
-#SBATCH --time=1-00:00:00
-#SBATCH --mem=175G
+#SBATCH --time=14-00:00:00
+#SBATCH --mem=10G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=40
+#SBATCH --cpus-per-task=20
 #SBATCH --account=kernlab
-#SBATCH --mail-type=ALL
+#SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=nvillig2@uoregon.edu
 
 module load miniconda
 conda activate jupyterlab-tf-plus-20220915
 
 D0=training_data
+NUM=100
+OUTNAME=N${NUM}
 python disperseNN.py \
   --train \
   --validation_split 0.2 \
@@ -24,14 +26,14 @@ python disperseNN.py \
   --recapitate False \
   --mutate True \
   --mu 1e-8 \
-  --min_n 10 \
-  --max_n 10 \
+  --min_n ${NUM} \
+  --max_n ${NUM} \
   --edge_width 3 \
   --sampling_width 1 \
   --num_snps 5000 \
   --repeated_samples 50 \
-  --batch_size 40 \
+  --batch_size 50 \
   --threads ${SLURM_CPUS_PER_TASK} \
-  --max_epochs 2 \
+  --max_epochs 100 \
   --seed 12345 \
-  --out ${D0}/out1
+  --out ${D0}/${OUTNAME}

@@ -9,7 +9,7 @@ import multiprocessing
 import warnings
 from attrs import define,field
 from read_input import *
-from process_input import *
+# from process_input import *
 
 @define
 class DataGenerator(tf.keras.utils.Sequence):
@@ -311,14 +311,17 @@ class DataGenerator(tf.keras.utils.Sequence):
         X2 = np.empty((self.batch_size*self.num_reps,))  # sample widths
 
         num_targets = len(self.targets[0])
-        y = np.empty((self.batch_size*self.num_reps, num_targets), dtype=float)  # targets 
+        ylist = []
+        [ylist.append(np.zeros((self.batch_size * self.num_reps, 1))) for i in range(num_targets)]
 
         if self.preprocessed == False:
             ts_list = []
             for i, ID in enumerate(list_IDs_temp):
                 ts_list.append(self.trees[ID])
                 for rep in range(self.num_reps):
-                    y[rep+(i*self.num_reps)] = self.targets[ID]
+                    for t in range(num_targets):
+                        ylist[t][rep + (i * self.num_reps)] = self.targets[ID][t]
+
             seeds = np.random.randint(1e9, size=(self.batch_size))
             pool = multiprocessing.Pool(self.threads, maxtasksperchild=1)
             batch = pool.starmap(
@@ -341,4 +344,4 @@ class DataGenerator(tf.keras.utils.Sequence):
 
         X = [X1, X2]
 
-        return (X, y)
+        return (X, ylist)
