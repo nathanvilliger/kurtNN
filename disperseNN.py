@@ -239,19 +239,21 @@ def load_network():
         model.compile(loss="mse", optimizer=opt)
     else:
         out_mean = tf.keras.layers.Dense(1, activation="linear", name='out_mean')(h)
-        out_sd = tf.keras.layers.Dense(1, activation="linear", name='out_sd')(h)
-        out_LDDclass = tf.keras.layers.Dense(2, activation='softmax', name='out_LDD')(h) # one for each class
-        model = tf.keras.Model(
-            inputs=[geno_input, width_input], outputs=[out_mean, out_sd, out_LDDclass]
-        )
-        model.compile(loss={'out_mean':'mse', 'out_sd':'mse', 'out_LDD':'sparse_categorical_crossentropy'},
-                      optimizer=opt)
+        # out_sd = tf.keras.layers.Dense(1, activation="linear", name='out_sd')(h)
+        # out_LDDclass = tf.keras.layers.Dense(2, activation='softmax', name='out_LDD')(h) # one for each class
+        # model = tf.keras.Model(
+        #     inputs=[geno_input, width_input], outputs=[out_mean, out_sd, out_LDDclass]
+        # )
+        # model.compile(loss={'out_mean':'mse', 'out_sd':'mse', 'out_LDD':'sparse_categorical_crossentropy'},
+        #               optimizer=opt)
+        model = tf.keras.Model(inputs=[geno_input, width_input], outputs=[out_mean])
+        model.compile(loss={'out_mean':'mse'}, optimizer=opt)
 
     model.summary()
 
     # load weights
     if args.load_weights is not None:
-        print("loading saved weights")
+        print(f"loading saved weights from {args.load_weights}")
         model.load_weights(args.load_weights)
     else:
         if args.train == True and args.predict == True:
@@ -285,7 +287,9 @@ def load_network():
         min_lr=0,
     )
 
-    return model, checkpointer, earlystop, reducelr
+    csv_logger = tf.keras.callbacks.CSVLogger(f'{args.out}_history.csv')
+
+    return model, checkpointer, earlystop, reducelr, csv_logger
 
 
 def make_generator_params_dict(
@@ -360,7 +364,8 @@ def prep_trees_and_train():
         scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
         LDD_classes = list(target_df.LDD_class)
 
-        targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
+        # targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
+        targets = [[scaled_means[i]] for i in range(total_sims)]
         targets = dict_from_list(targets)
 
     # split into val,train sets
@@ -396,7 +401,7 @@ def prep_trees_and_train():
 
     # train
     load_dl_modules()
-    model, checkpointer, earlystop, reducelr = load_network()
+    model, checkpointer, earlystop, reducelr, csv_logger = load_network()
     print("training!")
     history = model.fit(
         x=training_generator,
@@ -405,7 +410,7 @@ def prep_trees_and_train():
         shuffle=False,  # (redundant with shuffling inside the generator)
         verbose=args.keras_verbose,
         validation_data=validation_generator,
-        callbacks=[checkpointer, earlystop, reducelr],
+        callbacks=[checkpointer, earlystop, reducelr, csv_logger],
     )
 
     return
@@ -561,10 +566,25 @@ def prep_preprocessed_and_pred():
 
 def prep_trees_and_pred():
 
-    # grab mean and sd from training distribution
-    meanSig, sdSig, args.max_n, args.num_snps = np.load(args.training_params)
-    args.max_n = int(args.max_n)
-    args.num_snps = int(args.num_snps)
+    # grab mean and sd from training distribution for un-standardizing predictions
+    if args.training_params != None:
+        if '.csv' in args.training_params: # assumed written using combine_summaries.R
+            training_params = pd.read_csv(args.training_params)
+            avg_mean_distance = float(training_params.avg_mean_distance)
+            sd_mean_distance = float(training_params.sd_mean_distance)
+            avg_sd_distance = float(training_params.avg_sd_distance)
+            sd_sd_distance = float(training_params.sd_sd_distance)
+        else: # must be written to .npy the usual way (old, for one-target model)
+            meanSig, sdSig, args.max_n, args.num_snps = np.load(args.training_params)
+            args.max_n = int(args.max_n)
+            args.num_snps = int(args.num_snps)
+    else:
+        # THE BAD WAY: assuming standardization comes from target df.
+        avg_mean_distance = np.mean(target_df.mean_distance)
+        sd_mean_distance = np.std(target_df.mean_distance)
+        avg_sd_distance = np.mean(target_df.sd_distance)
+        sd_sd_distance = np.std(target_df.sd_distance)
+
 
     # tree sequences
     trees = read_dict(args.tree_list)
@@ -574,6 +594,14 @@ def prep_trees_and_pred():
     if args.target_list != None:
         targets = read_single_value(args.target_list)
         targets = np.log(targets)
+    elif args.target_csv != None:
+        target_df = pd.read_csv(args.target_csv)
+        means, sds = target_df.mean_distance, target_df.sd_distance
+        scaled_means = np.array((means - np.mean(means)) / np.std(means))
+        scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
+        LDD_classes = list(target_df.LDD_class)
+        targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
+        targets = dict_from_list(targets)
     else:
         print("reading true values from tree sequences: this should take several minutes")
         targets = []
@@ -594,7 +622,7 @@ def prep_trees_and_pred():
 
     # get generator ready
     params = make_generator_params_dict(
-        targets=[None]*total_sims,
+        targets=targets,
         trees=trees,
         shuffle=False,
         genos=None,
@@ -607,9 +635,23 @@ def prep_trees_and_pred():
     model, checkpointer, earlystop, reducelr = load_network()
     print("predicting")
     predictions = model.predict(
-        x=generator,
+        x=generator, verbose=args.keras_verbose
     )
-    unpack_predictions(predictions, meanSig, sdSig, targets, simids, trees)
+    if args.target_csv == None:
+        unpack_predictions(predictions, meanSig, sdSig, targets, simids, trees)
+    else:
+        target_df['pred_mean_distance'] = predictions[0] * sd_mean_distance + avg_mean_distance
+        dist_mrae = np.mean(np.abs(target_df.pred_mean_distance - target_df.mean_distance) / target_df.mean_distance)
+        print(f'MRAE for mean dispersal distance prediction: {dist_mrae:.3f}')
+
+        target_df['pred_sd_distance'] = predictions[1] * sd_sd_distance + avg_sd_distance
+        sd_mrae = np.mean(np.abs(target_df.pred_sd_distance - target_df.sd_distance) / target_df.sd_distance)
+        print(f'MRAE for sd dispersal distance prediction: {sd_mrae:.3f}')
+
+        target_df['prob_NO_LDD'] = predictions[2][:, 0]
+        target_df['prob_YES_LDD'] = predictions[2][:, 1]
+        target_df['pred_LDD_class'] = (target_df['prob_YES_LDD'] > 0.5).astype(int)
+        target_df.to_csv(f'{args.out}_predictions.csv', index=False)
 
     return
 
