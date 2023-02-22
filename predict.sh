@@ -18,7 +18,7 @@ conda activate jupyterlab-tf-plus-20220915
 
 D0=training_data
 NUM=10
-OUTNAME=N${NUM}
+OUTNAME=N${NUM}_gpu_single_out
 python disperseNN.py \
   --predict \
   --load_weights ${D0}/${OUTNAME}_model.hdf5 \
