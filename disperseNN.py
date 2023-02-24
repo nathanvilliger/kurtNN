@@ -619,8 +619,8 @@ def prep_trees_and_pred():
     if args.num_pred == None:
         args.num_pred = int(total_sims)
 
-    simids = np.random.choice(np.arange(total_sims),
-                              args.num_pred, replace=False)
+    # simids = np.random.choice(np.arange(total_sims), args.num_pred, replace=False)
+    simids = np.arange(total_sims)
     partition["prediction"] = simids
 
     # get generator ready
