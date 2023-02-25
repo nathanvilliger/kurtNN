@@ -364,10 +364,11 @@ def prep_trees_and_train():
         means, sds = target_df.mean_distance, target_df.sd_distance
         scaled_means = np.array((means - np.mean(means)) / np.std(means))
         scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
+        logmeans, logsds = np.log(scaled_means), np.log(scaled_sds)
         LDD_classes = list(target_df.LDD_class)
 
-        # targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
-        targets = [[scaled_means[i]] for i in range(total_sims)]
+        # targets = [[logmeans[i], logsds[i], LDD_classes[i]] for i in range(total_sims)]
+        targets = [[logmeans[i]] for i in range(total_sims)]
         targets = dict_from_list(targets)
 
     # split into val,train sets
@@ -572,10 +573,10 @@ def prep_trees_and_pred():
     if args.training_params != None:
         if '.csv' in args.training_params: # assumed written using combine_summaries.R
             training_params = pd.read_csv(args.training_params)
-            avg_mean_distance = float(training_params.avg_mean_distance)
-            sd_mean_distance = float(training_params.sd_mean_distance)
-            # avg_sd_distance = float(training_params.avg_sd_distance)
-            # sd_sd_distance = float(training_params.sd_sd_distance)
+            avg_mean_distance = float(training_params['avg of mean(actualized dispersal distances)'])
+            sd_mean_distance = float(training_params['sd of mean(actualized dispersal distances)'])
+            # avg_sd_distance = float(training_params['avg of sd(actualized dispersal distances)'])
+            # sd_sd_distance = float(training_params['sd of sd(actualized dispersal distances)'])
         else: # must be written to .npy the usual way (old, for one-target model)
             meanSig, sdSig, args.max_n, args.num_snps = np.load(args.training_params)
             args.max_n = int(args.max_n)
@@ -643,12 +644,12 @@ def prep_trees_and_pred():
     if args.target_csv == None:
         unpack_predictions(predictions, meanSig, sdSig, targets, simids, trees)
     else:
-        # target_df['pred_mean_distance'] = predictions[0] * sd_mean_distance + avg_mean_distance
-        target_df['pred_mean_distance'] = predictions * sd_mean_distance + avg_mean_distance
+        # target_df['pred_mean_distance'] = np.exp(predictions[0]) * sd_mean_distance + avg_mean_distance
+        target_df['pred_mean_distance'] = np.exp(predictions) * sd_mean_distance + avg_mean_distance
         dist_mrae = np.mean(np.abs(target_df.pred_mean_distance - target_df.mean_distance) / target_df.mean_distance)
         print(f'MRAE for mean dispersal distance prediction: {dist_mrae:.3f}')
 
-        # target_df['pred_sd_distance'] = predictions[1] * sd_sd_distance + avg_sd_distance
+        # target_df['pred_sd_distance'] = np.exp(predictions[1]) * sd_sd_distance + avg_sd_distance
         # sd_mrae = np.mean(np.abs(target_df.pred_sd_distance - target_df.sd_distance) / target_df.sd_distance)
         # print(f'MRAE for sd dispersal distance prediction: {sd_mrae:.3f}')
         #

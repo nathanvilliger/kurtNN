@@ -14,10 +14,10 @@ outname <- str_c(d0, 'combined_summary.csv')
 write_csv(bound, outname)
 
 summary <- bound %>% 
-  summarize(avg_mean_distance = mean(mean_distance),
-            sd_mean_distance = sd(mean_distance),
-            avg_sd_distance = mean(sd_distance),
-            sd_sd_distance = sd(sd_distance))
+  summarize(`avg of mean(actualized dispersal distances)` = mean(mean_distance),
+            `sd of mean(actualized dispersal distances)` = sd(mean_distance),
+            `avg of sd(actualized dispersal distances)` = mean(sd_distance),
+            `sd of sd(actualized dispersal distances)` = sd(sd_distance))
 
 summary_outname <- str_c(d0, 'summary_stats.csv')
 write_csv(summary, summary_outname)
