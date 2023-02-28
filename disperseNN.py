@@ -361,14 +361,19 @@ def prep_trees_and_train():
 
     # now assume three targets from target_df
     else:
-        means, sds = target_df.mean_distance, target_df.sd_distance
+        means = target_df.mean_distance
+        print('percentiles of training dist:', np.percentile(means, q=[0, 25, 50, 75, 100]))
+        means = np.log(means)
         scaled_means = np.array((means - np.mean(means)) / np.std(means))
-        scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
-        logmeans, logsds = np.log(scaled_means), np.log(scaled_sds)
+
+        # sds = target_df.sd_distance
+        # sds = np.log(sds)
+        # scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
+
         LDD_classes = list(target_df.LDD_class)
 
-        # targets = [[logmeans[i], logsds[i], LDD_classes[i]] for i in range(total_sims)]
-        targets = [[logmeans[i]] for i in range(total_sims)]
+        # targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
+        targets = [[scaled_means[i]] for i in range(total_sims)]
         targets = dict_from_list(targets)
 
     # split into val,train sets
@@ -571,23 +576,10 @@ def prep_trees_and_pred():
 
     # grab mean and sd from training distribution for un-standardizing predictions
     if args.training_params != None:
-        if '.csv' in args.training_params: # assumed written using combine_summaries.R
-            training_params = pd.read_csv(args.training_params)
-            avg_mean_distance = float(training_params['avg of mean(actualized dispersal distances)'])
-            sd_mean_distance = float(training_params['sd of mean(actualized dispersal distances)'])
-            # avg_sd_distance = float(training_params['avg of sd(actualized dispersal distances)'])
-            # sd_sd_distance = float(training_params['sd of sd(actualized dispersal distances)'])
-        else: # must be written to .npy the usual way (old, for one-target model)
+        if '.npy' in args.training_params: # assumed  written to .npy the usual way (old, for one-target model)
             meanSig, sdSig, args.max_n, args.num_snps = np.load(args.training_params)
             args.max_n = int(args.max_n)
             args.num_snps = int(args.num_snps)
-    else:
-        # THE BAD WAY: assuming standardization comes from target df.
-        avg_mean_distance = np.mean(target_df.mean_distance)
-        sd_mean_distance = np.std(target_df.mean_distance)
-        avg_sd_distance = np.mean(target_df.sd_distance)
-        sd_sd_distance = np.std(target_df.sd_distance)
-
 
     # tree sequences
     trees = read_dict(args.tree_list)
@@ -600,6 +592,7 @@ def prep_trees_and_pred():
     elif args.target_csv != None:
         target_df = pd.read_csv(args.target_csv)
         means, sds = target_df.mean_distance, target_df.sd_distance
+        means = np.log(means)
         scaled_means = np.array((means - np.mean(means)) / np.std(means))
         scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
         LDD_classes = list(target_df.LDD_class)
@@ -644,15 +637,12 @@ def prep_trees_and_pred():
     if args.target_csv == None:
         unpack_predictions(predictions, meanSig, sdSig, targets, simids, trees)
     else:
-        # target_df['pred_mean_distance'] = np.exp(predictions[0]) * sd_mean_distance + avg_mean_distance
-        target_df['pred_mean_distance'] = np.exp(predictions) * sd_mean_distance + avg_mean_distance
-        dist_mrae = np.mean(np.abs(target_df.pred_mean_distance - target_df.mean_distance) / target_df.mean_distance)
-        print(f'MRAE for mean dispersal distance prediction: {dist_mrae:.3f}')
+        for i, var in enumerate(['mean_distance']): #, 'sd_distance']):
+            target_df[f'pred_{var}'] = unscale_predictions(predictions, variable=var) # single-output
+            # target_df[f'pred_{var}'] = unscale_predictions(predictions[i], variable=var) # multiple outputs
+            mrae = np.mean(np.abs(target_df[f'pred_{var}'] - target_df[var]) / target_df[var])
+            print(f'MRAE for {var} prediction: {mrae:.3f}')
 
-        # target_df['pred_sd_distance'] = np.exp(predictions[1]) * sd_sd_distance + avg_sd_distance
-        # sd_mrae = np.mean(np.abs(target_df.pred_sd_distance - target_df.sd_distance) / target_df.sd_distance)
-        # print(f'MRAE for sd dispersal distance prediction: {sd_mrae:.3f}')
-        #
         # target_df['prob_NO_LDD'] = predictions[2][:, 0]
         # target_df['prob_YES_LDD'] = predictions[2][:, 1]
         # target_df['pred_LDD_class'] = (target_df['prob_YES_LDD'] > 0.5).astype(int)
@@ -660,6 +650,27 @@ def prep_trees_and_pred():
 
     return
 
+def unscale_predictions(preds, variable='mean_distance', training_data=args.training_params):
+    '''
+    Data are log-transformed and then standardized in `prep_trees_and_train()`.
+    Use this to un-standardize and exponentiate model predictions such that
+    predictions are in the same unscaled SLiM distance units as the original targets.
+
+    Inputs: preds- model predictions to unscale/unstandardize
+            variable- which prediction are we un-standardizing, mean dispersal distance
+                      or standard deviation in dispersal distances? 'mean_distance' or 'sd_distance'
+            training_data- file name for CSV that contains the training data
+
+    Output: unscaled- unscaled/un-standardized/exponentiated predictions to match original targets as
+                      reported by SLiM simulations
+    '''
+
+    training_df = pd.read_csv(training_data)
+    training_mean = np.mean(np.log(training_df[variable]))
+    training_sd = np.std(np.log(training_df[variable]))
+    unscaled = np.exp(preds * training_sd + training_mean)
+
+    return unscaled
 
 def unpack_predictions(predictions, meanSig, sdSig, targets, simids, file_names):
     if args.empirical == None:
