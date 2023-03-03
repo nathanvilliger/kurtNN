@@ -178,6 +178,10 @@ parser.add_argument(
     type=float,
     help="learning rate.",
 )
+parser.add_argument(
+    "--MDS_sorting", action="store_true", default=False,
+    help="use multidimensional scaling to sort individuals by location?"
+)
 args = parser.parse_args()
 check_params(args)
 
@@ -320,6 +324,7 @@ def make_generator_params_dict(
         "genos": genos,
         "preprocessed": args.preprocessed,
         "num_reps": args.num_reps,
+        "MDS_sorting": args.MDS_sorting
     }
     return params
 
@@ -362,7 +367,6 @@ def prep_trees_and_train():
     # now assume three targets from target_df
     else:
         means = target_df.mean_distance
-        print('percentiles of training dist:', np.percentile(means, q=[0, 25, 50, 75, 100]))
         means = np.log(means)
         scaled_means = np.array((means - np.mean(means)) / np.std(means))
 

@@ -39,6 +39,7 @@ class DataGenerator(tf.keras.utils.Sequence):
     genos: dict
     preprocessed: bool
     num_reps: int
+    MDS_sorting: bool
 
     def __attrs_post_init__(self):
         "Initialize a few things"
@@ -235,21 +236,18 @@ class DataGenerator(tf.keras.utils.Sequence):
                 if d > sampling_width:
                     sampling_width = float(d)
 
-        # MDS to reorder samples
-        mds = MDS(random_state=seed, n_components=1)
-        locs_mds = mds.fit_transform(locs).flatten()
-        new_indices = np.argsort(locs_mds)
-
-        # alternatively, order by x axis
-        # new_indices = np.argsort(locs[:,0])
-
         # grab genos
         geno_mat0 = ts.genotype_matrix()
-        interleaved_indices = []
-        for i in new_indices:
-            interleaved_indices.append(i*2)
-            interleaved_indices.append(i*2+1)
-        geno_mat0 = geno_mat0[:,interleaved_indices]
+        if self.MDS_sorting:
+            mds = MDS(random_state=seed, n_components=1)
+            locs_mds = mds.fit_transform(locs).flatten()
+            new_indices = np.argsort(locs_mds)
+
+            interleaved_indices = []
+            for i in new_indices:
+                interleaved_indices.append(i*2)
+                interleaved_indices.append(i*2+1)
+            geno_mat0 = geno_mat0[:,interleaved_indices]
 
         # change 0,1 encoding to major/minor allele
         if self.polarize == 2:
