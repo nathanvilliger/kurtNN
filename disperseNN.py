@@ -247,13 +247,14 @@ def load_network():
         out_mean = tf.keras.layers.Dense(1, activation="linear", name='out_mean')(h)
         out_sd = tf.keras.layers.Dense(1, activation="linear", name='out_sd')(h)
         out_LDDclass = tf.keras.layers.Dense(2, activation='softmax', name='out_LDD')(h) # one for each class
-        model = tf.keras.Model(
-            inputs=[geno_input, width_input], outputs=[out_mean, out_sd, out_LDDclass]
-        )
-        model.compile(loss={'out_mean':'mse', 'out_sd':'mse', 'out_LDD':'sparse_categorical_crossentropy'},
-                      optimizer=opt)
-        # model = tf.keras.Model(inputs=[geno_input, width_input], outputs=[out_mean])
-        # model.compile(loss={'out_mean':'mse'}, optimizer=opt)
+        # model = tf.keras.Model(
+        #     inputs=[geno_input, width_input], outputs=[out_mean, out_sd, out_LDDclass]
+        # )
+        # model.compile(loss={'out_mean':'mse', 'out_sd':'mse', 'out_LDD':'sparse_categorical_crossentropy'},
+        #               optimizer=opt)
+        model = tf.keras.Model(inputs=[geno_input, width_input], outputs=[out_LDDclass])
+        model.compile(loss={'out_LDD':'sparse_categorical_crossentropy'}, optimizer=opt,
+                      metrics=[tf.keras.metrics.SparseCategoricalAccuracy()])
 
     model.summary()
 
@@ -376,8 +377,8 @@ def prep_trees_and_train():
 
         LDD_classes = list(target_df.LDD_class)
 
-        targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
-        # targets = [[scaled_means[i]] for i in range(total_sims)]
+        # targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
+        targets = [[LDD_classes[i]] for i in range(total_sims)]
         targets = dict_from_list(targets)
 
     # split into val,train sets
@@ -594,15 +595,15 @@ def prep_trees_and_pred():
         targets = read_single_value(args.target_list)
         targets = np.log(targets)
     elif args.target_csv != None:
-        target_df = pd.read_csv(args.target_csv)
+        target_df = pd.read_csv(args.target_csv).iloc[:total_sims]
         means, sds = target_df.mean_distance, target_df.sd_distance
         means = np.log(means)
         scaled_means = np.array((means - np.mean(means)) / np.std(means))
         sds = np.log(sds)
         scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
         LDD_classes = list(target_df.LDD_class)
-        targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
-        # targets = [[scaled_means[i]] for i in range(total_sims)]
+        # targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
+        targets = [[LDD_classes[i]] for i in range(total_sims)]
         targets = dict_from_list(targets)
     else:
         print("reading true values from tree sequences: this should take several minutes")
@@ -642,14 +643,14 @@ def prep_trees_and_pred():
     if args.target_csv == None:
         unpack_predictions(predictions, meanSig, sdSig, targets, simids, trees)
     else:
-        for i, var in enumerate(['mean_distance', 'sd_distance']):
-            # target_df[f'pred_{var}'] = unscale_predictions(predictions, variable=var) # single-output
-            target_df[f'pred_{var}'] = unscale_predictions(predictions[i], variable=var) # multiple outputs
-            mrae = np.mean(np.abs(target_df[f'pred_{var}'] - target_df[var]) / target_df[var])
-            print(f'MRAE for {var} prediction: {mrae:.3f}')
+        # for i, var in enumerate(['mean_distance', 'sd_distance']):
+        #     # target_df[f'pred_{var}'] = unscale_predictions(predictions, variable=var) # single-output
+        #     target_df[f'pred_{var}'] = unscale_predictions(predictions[i], variable=var) # multiple outputs
+        #     mrae = np.mean(np.abs(target_df[f'pred_{var}'] - target_df[var]) / target_df[var])
+        #     print(f'MRAE for {var} prediction: {mrae:.3f}')
 
-        target_df['prob_NO_LDD'] = predictions[2][:, 0]
-        target_df['prob_YES_LDD'] = predictions[2][:, 1]
+        target_df['prob_NO_LDD'] = predictions[:, 0]
+        target_df['prob_YES_LDD'] = predictions[:, 1]
         target_df['pred_LDD_class'] = (target_df['prob_YES_LDD'] > 0.5).astype(int)
         correct = target_df['pred_LDD_class'] == target_df['LDD_class']
         print(f'proportion of correct LDD classifications: {(np.mean(correct)*100):.1f}%')
