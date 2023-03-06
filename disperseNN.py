@@ -247,10 +247,16 @@ def load_network():
         out_mean = tf.keras.layers.Dense(1, activation="linear", name='out_mean')(h)
         out_sd = tf.keras.layers.Dense(1, activation="linear", name='out_sd')(h)
         out_LDDclass = tf.keras.layers.Dense(2, activation='softmax', name='out_LDD')(h) # one for each class
+
+        meanMAPE = tf.keras.metrics.MeanAbsolutePercentageError()
+        sdMAPE = tf.keras.metrics.MeanAbsolutePercentageError()
+        SCA = tf.keras.metrics.SparseCategoricalAccuracy()
+
         model = tf.keras.Model(
             inputs=[geno_input, width_input], outputs=[out_mean, out_sd, out_LDDclass]
         )
         model.compile(loss={'out_mean':'mse', 'out_sd':'mse', 'out_LDD':'sparse_categorical_crossentropy'},
+                      metrics={'out_mean': meanMAPE, 'out_sd': sdMAPE, 'out_LDD': SCA},
                       optimizer=opt)
         # model = tf.keras.Model(inputs=[geno_input, width_input], outputs=[out_mean])
         # model.compile(loss={'out_mean':'mse'}, optimizer=opt)
@@ -594,7 +600,7 @@ def prep_trees_and_pred():
         targets = read_single_value(args.target_list)
         targets = np.log(targets)
     elif args.target_csv != None:
-        target_df = pd.read_csv(args.target_csv)
+        target_df = pd.read_csv(args.target_csv).iloc[:total_sims] # CAREFUL!
         means, sds = target_df.mean_distance, target_df.sd_distance
         means = np.log(means)
         scaled_means = np.array((means - np.mean(means)) / np.std(means))
