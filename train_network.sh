@@ -1,14 +1,14 @@
 #!/bin/bash
-#SBATCH --partition=kerngpu
-#SBATCH --job-name=lr5
+#SBATCH --partition=kern
+#SBATCH --job-name=less_drop_l2_full
 #SBATCH --output=%x.txt
 #SBATCH --error=%x.txt
-#SBATCH --time=4-00:00:00
-#SBATCH --mem=10G
+#SBATCH --time=14-00:00:00
+#SBATCH --mem=20G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=20
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:0
 #SBATCH --account=kernlab
 #SBATCH --exclude=n244
 #SBATCH --mail-type=END,FAIL
@@ -18,11 +18,11 @@ module load miniconda
 conda activate jupyterlab-tf-plus-20220915
 
 D0=training_data
-NUM=10
-OUTNAME=N${NUM}_single_out_lr5
+NUM=100
+OUTNAME=N${NUM}_classM_lessdropout_l2_full
 python disperseNN.py \
   --train \
-  --gpu_index any \
+  --gpu_index -1 \
   --validation_split 0.2 \
   --tree_list ${D0}/tree_list.txt \
   --target_csv ${D0}/combined_summary.csv \
@@ -37,8 +37,10 @@ python disperseNN.py \
   --repeated_samples 50 \
   --batch_size 50 \
   --threads ${SLURM_CPUS_PER_TASK} \
-  --max_epochs 20 \
-  --learning_rate 1e-5 \
+  --max_epochs 100 \
+  --learning_rate 1e-4 \
+  --dropout 0.2 \
   --keras_verbose 2 \
   --seed 12345 \
-  --out ${D0}/${OUTNAME}
+  --out ${D0}/${OUTNAME} \
+  --MDS_sorting

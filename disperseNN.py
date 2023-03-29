@@ -5,6 +5,7 @@ import argparse
 import pandas as pd
 import tskit
 from sklearn.model_selection import train_test_split
+from tensorflow.keras import regularizers
 from check_params import *
 from read_input import *
 # from process_input import *
@@ -225,14 +226,18 @@ def load_network():
         )(h)
         h = tf.keras.layers.AveragePooling1D(pool_size=pooling_size)(h)
 
+    reg = regularizers.l2(0.001)
     h = tf.keras.layers.Flatten()(h)
-    h = tf.keras.layers.Dense(128, activation="relu")(h)
-    h = tf.keras.layers.Dense(128, activation="relu")(h)
-    h = tf.keras.layers.Dense(128, activation="relu")(h)
+    h = tf.keras.layers.Dense(128, activation="relu", kernel_regularizer=reg)(h)
+    h = tf.keras.layers.Dropout(args.dropout)(h)
+    h = tf.keras.layers.Dense(128, activation="relu", kernel_regularizer=reg)(h)
+    h = tf.keras.layers.Dropout(args.dropout)(h)
+    h = tf.keras.layers.Dense(128, activation="relu", kernel_regularizer=reg)(h)
+    h = tf.keras.layers.Dropout(args.dropout)(h)
 
     width_input = tf.keras.layers.Input(shape=(1))
     h = tf.keras.layers.concatenate([h, width_input])
-    h = tf.keras.layers.Dense(128, activation="relu")(h)
+    h = tf.keras.layers.Dense(128, activation="relu", kernel_regularizer=reg)(h)
 
     h = tf.keras.layers.Dropout(args.dropout)(h)
     opt = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
@@ -244,8 +249,8 @@ def load_network():
         )
         model.compile(loss="mse", optimizer=opt)
     else:
-        out_mean = tf.keras.layers.Dense(1, activation="linear", name='out_mean')(h)
-        out_sd = tf.keras.layers.Dense(1, activation="linear", name='out_sd')(h)
+        # out_mean = tf.keras.layers.Dense(1, activation="linear", name='out_mean')(h)
+        # out_sd = tf.keras.layers.Dense(1, activation="linear", name='out_sd')(h)
         out_LDDclass = tf.keras.layers.Dense(2, activation='softmax', name='out_LDD')(h) # one for each class
         # model = tf.keras.Model(
         #     inputs=[geno_input, width_input], outputs=[out_mean, out_sd, out_LDDclass]
