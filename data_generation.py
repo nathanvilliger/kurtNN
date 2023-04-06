@@ -9,7 +9,7 @@ import multiprocessing
 import warnings
 from attrs import define,field
 from read_input import *
-# from process_input import *
+from process_input import *
 from sklearn.manifold import MDS
 
 @define
@@ -118,7 +118,7 @@ class DataGenerator(tf.keras.utils.Sequence):
 
         return new_genotypes
 
-    def sample_ts(self, filepath, seed):
+    def sample_ts(self, filepath, seed, return_stats=False):
         "The meat: load in and fully process a tree sequence"
 
         # read input
@@ -302,7 +302,13 @@ class DataGenerator(tf.keras.utils.Sequence):
             geno_mat_all.append(geno_mat2)
             sample_width_all.append(sampling_width)
 
-        return geno_mat_all, sample_width_all
+        to_return = [geno_mat_all, sample_width_all]
+
+        if return_stats:
+            IBD = ibd(geno_mat0, locs, self.phase, self.num_snps)
+            to_return.append(IBD)
+
+        return to_return
 
 
     def preprocess_sample_ts(self, geno_path):

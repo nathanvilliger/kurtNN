@@ -39,7 +39,7 @@ def check_params(args):
             exit()
 
     # check some other param combinations
-    if args.train == False and args.predict == False and args.plot_history == False:
+    if args.train == False and args.predict == False and args.plot_history == False and args.compute_stats == False:
         print("either --train or --predict")
         exit()
     if args.sampling_width != None:
@@ -77,5 +77,3 @@ def check_params(args):
         elif args.recapitate == None:
             print("specify whether or not to recapitate the tree sequences")
             exit()
-
-

@@ -7,7 +7,7 @@ import tskit
 from sklearn.model_selection import train_test_split
 from check_params import *
 from read_input import *
-# from process_input import *
+from process_input import *
 from data_generation import DataGenerator
 import gpustat
 import matplotlib.pyplot as plt
@@ -182,6 +182,8 @@ parser.add_argument(
     "--MDS_sorting", action="store_true", default=False,
     help="use multidimensional scaling to sort individuals by location?"
 )
+parser.add_argument('--compute_stats', action='store_true', default=False,
+                    help='compute pop gen statistics, add to target_csv?')
 args = parser.parse_args()
 check_params(args)
 
@@ -246,17 +248,16 @@ def load_network():
     else:
         out_mean = tf.keras.layers.Dense(1, activation="linear", name='out_mean')(h)
         out_sd = tf.keras.layers.Dense(1, activation="linear", name='out_sd')(h)
-        out_LDDclass = tf.keras.layers.Dense(2, activation='softmax', name='out_LDD')(h) # one for each class
+        # out_LDDclass = tf.keras.layers.Dense(2, activation='softmax', name='out_LDD')(h) # one for each class
 
-        meanMAPE = tf.keras.metrics.MeanAbsolutePercentageError()
-        sdMAPE = tf.keras.metrics.MeanAbsolutePercentageError()
-        SCA = tf.keras.metrics.SparseCategoricalAccuracy()
+        # meanMAPE = tf.keras.metrics.MeanAbsolutePercentageError()
+        # sdMAPE = tf.keras.metrics.MeanAbsolutePercentageError()
+        # SCA = tf.keras.metrics.SparseCategoricalAccuracy()
 
         model = tf.keras.Model(
-            inputs=[geno_input, width_input], outputs=[out_mean, out_sd, out_LDDclass]
+            inputs=[geno_input, width_input], outputs=[out_mean, out_sd]#, out_LDDclass]
         )
-        model.compile(loss={'out_mean':'mse', 'out_sd':'mse', 'out_LDD':'sparse_categorical_crossentropy'},
-                      metrics={'out_mean': meanMAPE, 'out_sd': sdMAPE, 'out_LDD': SCA},
+        model.compile(loss={'out_mean':'mse', 'out_sd':'mse'},#, 'out_LDD':'sparse_categorical_crossentropy'},
                       optimizer=opt)
         # model = tf.keras.Model(inputs=[geno_input, width_input], outputs=[out_mean])
         # model.compile(loss={'out_mean':'mse'}, optimizer=opt)
@@ -380,10 +381,10 @@ def prep_trees_and_train():
         sds = np.log(sds)
         scaled_sds = np.array((sds - np.mean(sds)) / np.std(sds))
 
-        LDD_classes = list(target_df.LDD_class)
+        # LDD_classes = list(target_df.LDD_class)
 
-        targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
-        # targets = [[scaled_means[i]] for i in range(total_sims)]
+        # targets = [[scaled_means[i], scaled_sds[i], LDD_classes[i]] for i in range(total_sims)]
+        targets = [[scaled_means[i], scaled_sds[i]] for i in range(total_sims)]
         targets = dict_from_list(targets)
 
     # split into val,train sets
@@ -733,6 +734,42 @@ def plot_history():
     fig.savefig(args.plot_history+"_plot.pdf",bbox_inches='tight')
 
 
+def compute_stats():
+    '''
+    Compute pop gen statistics based on tree sequences and genotype matrix, add
+    to **pre-existing** target_csv
+    '''
+    if args.target_csv is None:
+        print('you messed up \n', flush=True)
+        exit()
+    else:
+        df = pd.read_csv(args.target_csv)
+
+    df['IBD_R2'] = np.nan
+    df['IBD_slope'] = np.nan
+    df['IBD_Nw'] = np.nan
+
+    trees = read_list(args.tree_list)
+    total_sims = len(trees)
+
+    for i in range(total_sims):
+        # initialize generator and some things
+        params = make_generator_params_dict(
+            targets=None,
+            trees=trees,
+            shuffle=True,
+            genos=None,
+            sample_widths=None,
+        )
+        gen = DataGenerator([None], **params)
+
+        # get genos and stuff
+        geno_mat, sample_width, [R2, b, Nw] = gen.sample_ts(trees[i], args.seed, return_stats=True)
+        df.loc[df.idx == i, ['IBD_R2', 'IBD_slope', 'IBD_Nw']] = R2, b, Nw
+
+    new_fname = args.target_csv.replace('.csv', '_wstats.csv')
+    df.to_csv(new_fname, index=False)
+
 
 ### main ###
 # train
@@ -748,6 +785,9 @@ if args.train == True:
 # plot history
 if args.plot_history:
     plot_history()
+
+if args.compute_stats:
+    compute_stats()
 
 # predict
 if args.predict == True:
