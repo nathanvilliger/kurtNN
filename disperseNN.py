@@ -765,7 +765,10 @@ def compute_stats():
 
         # get genos and stuff
         geno_mat, sample_width, [R2, b, Nw] = gen.sample_ts(trees[i], args.seed, return_stats=True)
-        df.loc[df.idx == i, ['IBD_R2', 'IBD_slope', 'IBD_Nw']] = R2, b, Nw
+
+        # highly specific check: assume tree names like 'training_data/tree4_recap.trees', grab number
+        treenum = int(trees[i].split('_recap')[0].split('tree')[1])
+        df.loc[df.idx == treenum, ['IBD_R2', 'IBD_slope', 'IBD_Nw']] = R2, b, Nw
 
     new_fname = args.target_csv.replace('.csv', '_wstats.csv')
     df.to_csv(new_fname, index=False)
