@@ -308,6 +308,9 @@ class DataGenerator(tf.keras.utils.Sequence):
             IBD = ibd(geno_mat0, locs, self.phase, self.num_snps)
             to_return.append(IBD)
 
+            tMRCA = ts.diversity(mode='branch') / 2
+            to_return.append(tMRCA)
+
         return to_return
 
 
