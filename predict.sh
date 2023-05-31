@@ -3,7 +3,7 @@
 #SBATCH --job-name=pred
 #SBATCH --output=%x.txt
 #SBATCH --error=%x.txt
-#SBATCH --time=0-01:00:00
+#SBATCH --time=0-02:00:00
 #SBATCH --mem=2G
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
@@ -17,12 +17,12 @@ module load miniconda
 conda activate jupyterlab-tf-plus-20220915
 
 D0=training_data
-NUM=10
-OUTNAME=N${NUM}_gpu_single_out
+NUM=100
+OUTNAME=production_double_N${NUM}_trip_lr3
 python disperseNN.py \
   --predict \
   --load_weights ${D0}/${OUTNAME}_model.hdf5 \
-  --training_params ${D0}/summary_stats.csv \
+  --training_params ${D0}/combined_summary.csv \
   --tree_list ${D0}/tree_list.txt \
   --target_csv ${D0}/combined_summary.csv \
   --recapitate False \
@@ -33,6 +33,7 @@ python disperseNN.py \
   --max_n ${NUM} \
   --edge_width 3 \
   --sampling_width 1 \
-  --seed 12345 \
+  --seed 1234 \
   --keras_verbose 2 \
-  --out ${D0}/${OUTNAME}
+  --out ${D0}/${OUTNAME} \
+  --MDS_sorting
