@@ -1,8 +1,6 @@
-# kurtNNtests
+# kurtNN
 
-## Initial idea
-
-Can we train disperseNN-like networks to learn:
+This code is for estimating dispersal rate and variability from genetic variation, and is based on the [disperseNN software](https://academic.oup.com/genetics/article/224/2/iyad068/7117621) developed by Smith et al. (2023). Our goal here is to train disperseNN-like neural networks to learn:
 
 1. What is the typical dispersal distance?
 
@@ -10,11 +8,11 @@ Can we train disperseNN-like networks to learn:
 
 3. Is there long-range dispersal in the population?
 
-*without* assuming any particular jump kernel during the training process? Original disperseNN assumed Gaussian jump kernels, NV later showed that similar models can accurately estimate the exponent of power law jump kernels when trained to do so. Perhaps a nice next step would be to estimate dispersal parameters without assuming any specific jump kernel. 
+*without* assuming any particular jump kernel during the training process. Original disperseNN assumed Gaussian jump kernels, NV later showed that similar models can accurately estimate the exponent of power law jump kernels when trained to do so. Perhaps a nice next step would be to estimate dispersal parameters without assuming any specific jump kernel.  
 
 ## The approach
 
-Generally: follow disperseNN as closely as possible. I may be slightly curt here at times; consider first checking the [disperseNN documentation](https://github.com/kr-colab/disperseNN) if anything written in this document is unclear. That being said, I will make an effort to highlight new things we do here that are not part of original disperseNN.
+Generally: follow disperseNN as closely as possible. I may be slightly curt here at times; consider first checking the [disperseNN documentation](https://github.com/kr-colab/disperseNN) if anything written in this document is unclear, or [my dissertation](https://www.proquest.com/openview/a42ab593e2ae4b5e5b488271fe60e6a9/1.pdf?pq-origsite=gscholar&cbl=18750&diss=y) for more explanation about applying these methods to populations with power law jump kernels. That being said, I will make an effort to highlight new things we do here that are not part of original disperseNN.
 
 Simulations may use either Gaussian or power law jump kernels. Our approach was to focus on the dispersal distances of everyone alive during the final time step of simulations. We trained models to estimate the sample mean and standard deviation of those dispersal distances for questions 1 and 2. For question 3, we initially thought we might use the sample excess kurtosis of the dispersal distances to draw a boundary between the yes and no classifications, hence the semi-sarcastic software name kurtNN ("curtain"); however, the excess kurtosis values in our training data were well separated, so we just tried to classify between Gaussian and power law jump kernels. 
 
